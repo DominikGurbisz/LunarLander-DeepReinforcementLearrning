@@ -1,0 +1,10 @@
+{
+  "algorithm": "reinforce",
+  "model_path": "models\\reinforce\\reinforce_smoke_seed1.pt",
+  "episodes": 5,
+  "mean_reward": -126.71784681757813,
+  "std_reward": 15.809404966643953,
+  "min_reward": -152.42199928849408,
+  "max_reward": -107.5317482270973,
+  "seed": 1
+}
