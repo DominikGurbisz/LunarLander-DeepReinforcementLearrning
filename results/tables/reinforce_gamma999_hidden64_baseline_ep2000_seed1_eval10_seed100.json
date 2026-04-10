@@ -1,0 +1,10 @@
+{
+  "algorithm": "reinforce",
+  "model_path": "models\\reinforce\\reinforce_gamma999_hidden64_baseline_ep2000_seed1.pt",
+  "episodes": 10,
+  "mean_reward": -2120.644309810755,
+  "std_reward": 1428.095739931439,
+  "min_reward": -5253.355495373102,
+  "max_reward": -734.6100958508264,
+  "seed": 100
+}
