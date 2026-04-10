@@ -54,7 +54,7 @@ def main() -> None:
             with torch.no_grad():
                 s = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
                 dist = Categorical(logits=policy(s))
-                action = int(torch.argmax(dist.probs, dim=1).item())
+                action = int(dist.sample().item())
             state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
             total_reward += reward
