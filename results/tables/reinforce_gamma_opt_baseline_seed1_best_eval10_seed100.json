@@ -1,0 +1,10 @@
+{
+  "algorithm": "reinforce",
+  "model_path": "models\\reinforce\\reinforce_gamma_opt_baseline_seed1_best.pt",
+  "episodes": 10,
+  "mean_reward": -226.9937725720108,
+  "std_reward": 191.11684721150706,
+  "min_reward": -746.5803538195404,
+  "max_reward": -43.793852268327484,
+  "seed": 100
+}
