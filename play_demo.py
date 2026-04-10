@@ -15,7 +15,7 @@ from src.reinforce.model import PolicyNetwork
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Play one demo episode with a saved agent")
-    parser.add_argument("--algo", choices=["dqn", "reinforce"], required=True)
+    parser.add_argument("--algo", choices=["dqn", "reinforce", "a2c"], required=True)
     parser.add_argument("--model-path", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--hidden-size", type=int, default=128)
