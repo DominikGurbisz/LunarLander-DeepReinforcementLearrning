@@ -103,8 +103,10 @@ python -m src.dqn.train_dqn --exp-name dqn_lr_opt_seed1 --seed 1 --lr 0.001 --ep
 
 ### REINFORCE (einzelner Lauf)
 ```bash
-python -m src.reinforce.train_reinforce --exp-name reinforce_gamma_opt_seed1 --seed 1 --gamma 0.99 --normalize-returns
+python -m src.reinforce.train_reinforce --exp-name reinforce_gamma_opt_seed1 --seed 1 --gamma 0.99 --normalize-returns --use-baseline
 ```
+
+Hinweis: `train_reinforce.py` unterstützt jetzt zusätzlich eine lernbare **Value-Baseline** (standardmäßig aktiv) mit `--value-lr` und `--value-loss-coef`.
 
 ## 7) Alle Kernexperimente starten
 

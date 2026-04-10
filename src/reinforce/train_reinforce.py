@@ -4,15 +4,15 @@ import argparse
 from pathlib import Path
 
 import gymnasium as gym
-import numpy as np
 import torch
+import torch.nn.functional as F
 from torch import optim
 from torch.distributions import Categorical
 
 from src.common.logger import CSVLogger
 from src.common.seed import set_global_seed
 from src.common.utils import ensure_dir, get_device, moving_average, save_json
-from src.reinforce.model import PolicyNetwork
+from src.reinforce.model import PolicyNetwork, ValueNetwork
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,7 +23,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--lr", type=float, default=5e-4)
+    parser.add_argument("--value-lr", type=float, default=5e-4)
     parser.add_argument("--hidden-size", type=int, default=128)
+    parser.add_argument("--use-baseline", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--value-loss-coef", type=float, default=0.5)
     parser.add_argument("--normalize-returns", action="store_true")
     parser.add_argument("--device", type=str, default="auto")
     return parser.parse_args()
@@ -51,6 +54,8 @@ def main() -> None:
 
     policy = PolicyNetwork(state_dim, action_dim, args.hidden_size).to(device)
     optimizer = optim.Adam(policy.parameters(), lr=args.lr)
+    value_net = ValueNetwork(state_dim, args.hidden_size).to(device) if args.use_baseline else None
+    value_optimizer = optim.Adam(value_net.parameters(), lr=args.value_lr) if value_net is not None else None
 
     run_dir = ensure_dir(Path("logs/reinforce") / args.exp_name)
     model_dir = ensure_dir(Path("models/reinforce"))
@@ -68,6 +73,9 @@ def main() -> None:
         "return_mean",
         "return_std",
         "grad_norm",
+        "value_loss",
+        "adv_mean",
+        "adv_std",
     ]
 
     rewards_history: list[float] = []
@@ -76,12 +84,14 @@ def main() -> None:
     with CSVLogger(run_dir / "metrics.csv", fieldnames) as logger:
         for episode in range(1, args.episodes + 1):
             state, _ = env.reset(seed=args.seed + episode)
+            states: list[torch.Tensor] = []
             log_probs: list[torch.Tensor] = []
             rewards: list[float] = []
             total_reward = 0.0
 
             for step in range(args.max_steps):
                 st = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+                states.append(st.squeeze(0))
                 logits = policy(st)
                 dist = Categorical(logits=logits)
                 action = dist.sample()
@@ -97,16 +107,35 @@ def main() -> None:
             if args.normalize_returns and len(returns) > 1:
                 returns = (returns - returns.mean()) / (returns.std() + 1e-8)
 
-            policy_loss = -(torch.stack(log_probs) * returns).sum()
+            values = None
+            value_loss = torch.tensor(0.0, dtype=torch.float32, device=device)
+            advantages = returns
+            if value_net is not None and value_optimizer is not None and states:
+                states_tensor = torch.stack(states)
+                values = value_net(states_tensor).squeeze(1)
+                value_loss = F.mse_loss(values, returns)
+                advantages = returns - values.detach()
+
+            policy_loss = -(torch.stack(log_probs) * advantages).sum()
+            total_loss = policy_loss + args.value_loss_coef * value_loss
+
             optimizer.zero_grad()
-            policy_loss.backward()
+            if value_optimizer is not None:
+                value_optimizer.zero_grad()
+            total_loss.backward()
             grad_norm = float(torch.nn.utils.clip_grad_norm_(policy.parameters(), 10.0).item())
+            if value_net is not None:
+                torch.nn.utils.clip_grad_norm_(value_net.parameters(), 10.0)
             optimizer.step()
+            if value_optimizer is not None:
+                value_optimizer.step()
 
             rewards_history.append(total_reward)
             ma = moving_average(rewards_history, window=50)[-1]
             ret_mean = float(returns.mean().item()) if len(returns) else 0.0
             ret_std = float(returns.std().item()) if len(returns) > 1 else 0.0
+            adv_mean = float(advantages.mean().item()) if len(advantages) else 0.0
+            adv_std = float(advantages.std().item()) if len(advantages) > 1 else 0.0
 
             logger.log(
                 {
@@ -122,6 +151,9 @@ def main() -> None:
                     "return_mean": ret_mean,
                     "return_std": ret_std,
                     "grad_norm": grad_norm,
+                    "value_loss": float(value_loss.item()),
+                    "adv_mean": adv_mean,
+                    "adv_std": adv_std,
                 }
             )
 
