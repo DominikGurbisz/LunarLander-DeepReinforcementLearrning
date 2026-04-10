@@ -2,9 +2,9 @@
   "algorithm": "reinforce",
   "model_path": "models\\reinforce\\reinforce_gamma99_hidden64_baseline_stable_ep2000_seed1_best.pt",
   "episodes": 10,
-  "mean_reward": -144.25679341666265,
-  "std_reward": 101.16284409844359,
-  "min_reward": -431.24911701307593,
-  "max_reward": -56.206222535712996,
+  "mean_reward": -100.81418006828414,
+  "std_reward": 17.64353279126303,
+  "min_reward": -125.3546257737477,
+  "max_reward": -72.54014781646806,
   "seed": 100
 }
