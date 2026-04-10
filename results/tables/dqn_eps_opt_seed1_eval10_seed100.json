@@ -1,0 +1,10 @@
+{
+  "algorithm": "dqn",
+  "model_path": "models\\dqn\\dqn_epsilon_decay_opt_seed1.pt",
+  "episodes": 10,
+  "mean_reward": 169.78376458760005,
+  "std_reward": 93.23727955955306,
+  "min_reward": 37.80603478946688,
+  "max_reward": 299.0966952726792,
+  "seed": 100
+}

@@ -1,0 +1,20 @@
+{
+  "algorithm": "reinforce",
+  "exp_name": "reinforce_hidden_size_low_seed1",
+  "seed": 1,
+  "final_model": "models\\reinforce\\reinforce_hidden_size_low_seed1.pt",
+  "episodes": 800,
+  "best_episode_reward": 63.382159672657366,
+  "final_moving_avg_50": -163.74438031553808,
+  "hyperparameters": {
+    "exp_name": "reinforce_hidden_size_low_seed1",
+    "seed": 1,
+    "episodes": 800,
+    "max_steps": 1000,
+    "gamma": 0.99,
+    "lr": 0.0005,
+    "hidden_size": 64,
+    "normalize_returns": true,
+    "device": "auto"
+  }
+}
