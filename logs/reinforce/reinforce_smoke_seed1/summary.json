@@ -1,0 +1,20 @@
+{
+  "algorithm": "reinforce",
+  "exp_name": "reinforce_smoke_seed1",
+  "seed": 1,
+  "final_model": "models\\reinforce\\reinforce_smoke_seed1.pt",
+  "episodes": 20,
+  "best_episode_reward": -87.43083548124451,
+  "final_moving_avg_50": -219.26466691171623,
+  "hyperparameters": {
+    "exp_name": "reinforce_smoke_seed1",
+    "seed": 1,
+    "episodes": 20,
+    "max_steps": 1000,
+    "gamma": 0.99,
+    "lr": 0.0005,
+    "hidden_size": 128,
+    "normalize_returns": true,
+    "device": "auto"
+  }
+}
