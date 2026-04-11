@@ -1,0 +1,10 @@
+{
+  "algorithm": "a2c",
+  "model_path": "models\\a2c\\a2c_friend_opt1_seed1_best.pt",
+  "episodes": 20,
+  "mean_reward": 20.145661502779994,
+  "std_reward": 120.3494886138256,
+  "min_reward": -113.6760800562406,
+  "max_reward": 202.1500717182596,
+  "seed": 1
+}
