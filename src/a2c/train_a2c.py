@@ -4,31 +4,40 @@ import argparse
 from pathlib import Path
 
 import gymnasium as gym
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import optim
 from torch.distributions import Categorical
 
+from src.a2c.model import PolicyNetwork, ValueNetwork
 from src.common.logger import CSVLogger
 from src.common.seed import set_global_seed
 from src.common.utils import ensure_dir, get_device, moving_average, save_json
-from src.a2c.model import PolicyNetwork, ValueNetwork
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train A2C on LunarLander-v3")
     parser.add_argument("--exp-name", type=str, default="a2c_default")
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--episodes", type=int, default=800)
+    parser.add_argument("--total-timesteps", type=int, default=800_000)
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--gamma", type=float, default=0.99)
+    parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--value-lr", type=float, default=5e-4)
     parser.add_argument("--hidden-size", type=int, default=128)
     parser.add_argument("--value-loss-coef", type=float, default=0.5)
     parser.add_argument("--entropy-coef", type=float, default=1e-2)
+    parser.add_argument("--num-envs", type=int, default=8)
+    parser.add_argument("--n-steps", type=int, default=5)
+    parser.add_argument("--max-grad-norm", type=float, default=10.0)
     parser.add_argument("--device", type=str, default="auto")
     return parser.parse_args()
+
+
+def make_env() -> gym.Env:
+    return gym.make("LunarLander-v3")
 
 
 def main() -> None:
@@ -36,11 +45,11 @@ def main() -> None:
     set_global_seed(args.seed)
     device = get_device(args.device)
 
-    env = gym.make("LunarLander-v3")
-    env.action_space.seed(args.seed)
+    envs = gym.vector.SyncVectorEnv([make_env for _ in range(args.num_envs)])
+    envs.action_space.seed(args.seed)
 
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.n
+    state_dim = envs.single_observation_space.shape[0]
+    action_dim = envs.single_action_space.n
 
     policy = PolicyNetwork(state_dim, action_dim, args.hidden_size).to(device)
     value_net = ValueNetwork(state_dim, args.hidden_size).to(device)
@@ -69,108 +78,141 @@ def main() -> None:
 
     rewards_history: list[float] = []
     best_reward = -float("inf")
+    episode_count = 0
+
+    next_obs, _ = envs.reset(seed=args.seed)
+    global_step = 0
+
+    ep_rewards = np.zeros(args.num_envs, dtype=np.float32)
+    ep_lengths = np.zeros(args.num_envs, dtype=np.int32)
+
+    last_finished_reward = 0.0
+    last_finished_length = 0
 
     with CSVLogger(run_dir / "metrics.csv", fieldnames) as logger:
-        for episode in range(1, args.episodes + 1):
-            state, _ = env.reset(seed=args.seed + episode)
+        while global_step < args.total_timesteps:
+            obs_buf: list[torch.Tensor] = []
+            actions_buf: list[torch.Tensor] = []
+            logprob_buf: list[torch.Tensor] = []
+            rewards_buf: list[torch.Tensor] = []
+            dones_buf: list[torch.Tensor] = []
+            values_buf: list[torch.Tensor] = []
+            entropy_buf: list[torch.Tensor] = []
 
-            total_reward = 0.0
-            step_count = 0
+            for _ in range(args.n_steps):
+                global_step += args.num_envs
+                obs_t = torch.tensor(next_obs, dtype=torch.float32, device=device)
 
-            episode_total_losses: list[float] = []
-            episode_policy_losses: list[float] = []
-            episode_value_losses: list[float] = []
-            episode_entropies: list[float] = []
-            episode_advantages: list[float] = []
-            episode_grad_norms: list[float] = []
-
-            for step in range(args.max_steps):
-                step_count = step + 1
-
-                st = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-                logits = policy(st)
-                value = value_net(st).squeeze(1)
-
+                logits = policy(obs_t)
                 dist = Categorical(logits=logits)
-                action = dist.sample()
+                actions = dist.sample()
+                logprob = dist.log_prob(actions)
+                entropy = dist.entropy()
+                values = value_net(obs_t).squeeze(1)
 
-                next_state, reward, terminated, truncated, _ = env.step(int(action.item()))
-                done = terminated or truncated
-                total_reward += float(reward)
+                next_obs, rewards, terminated, truncated, _ = envs.step(actions.cpu().numpy())
+                dones = np.logical_or(terminated, truncated)
 
-                with torch.no_grad():
-                    if done:
-                        next_value = torch.zeros(1, dtype=torch.float32, device=device)
-                    else:
-                        next_st = torch.tensor(next_state, dtype=torch.float32, device=device).unsqueeze(0)
-                        next_value = value_net(next_st).squeeze(1)
+                obs_buf.append(obs_t)
+                actions_buf.append(actions)
+                logprob_buf.append(logprob)
+                rewards_buf.append(torch.tensor(rewards, dtype=torch.float32, device=device))
+                dones_buf.append(torch.tensor(dones.astype(np.float32), dtype=torch.float32, device=device))
+                values_buf.append(values)
+                entropy_buf.append(entropy)
 
-                reward_tensor = torch.tensor([float(reward)], dtype=torch.float32, device=device)
-                done_tensor = torch.tensor([1.0 if done else 0.0], dtype=torch.float32, device=device)
+                ep_rewards += rewards
+                ep_lengths += 1
 
-                td_target = reward_tensor + args.gamma * next_value * (1.0 - done_tensor)
-                advantage = td_target - value
+                for idx in np.where(dones)[0]:
+                    episode_count += 1
+                    total_reward = float(ep_rewards[idx])
+                    episode_length = int(ep_lengths[idx])
+                    rewards_history.append(total_reward)
+                    ma = moving_average(rewards_history, window=50)[-1]
+                    last_finished_reward = total_reward
+                    last_finished_length = episode_length
 
-                policy_loss = -(dist.log_prob(action) * advantage.detach()).mean()
-                value_loss = F.mse_loss(value, td_target)
-                entropy = dist.entropy().mean()
+                    ep_rewards[idx] = 0.0
+                    ep_lengths[idx] = 0
 
-                total_loss = (
-                    policy_loss
-                    + args.value_loss_coef * value_loss
-                    - args.entropy_coef * entropy
+                    if total_reward > best_reward:
+                        best_reward = total_reward
+                        torch.save(policy.state_dict(), model_dir / f"{args.exp_name}_best.pt")
+                        torch.save(value_net.state_dict(), model_dir / f"{args.exp_name}_value_best.pt")
+
+                    if episode_count % 10 == 0:
+                        print(
+                            f"[A2C] ep={episode_count:4d} reward={total_reward:8.2f} ma50={ma:8.2f} step={global_step:7d}"
+                        )
+
+            with torch.no_grad():
+                next_obs_t = torch.tensor(next_obs, dtype=torch.float32, device=device)
+                next_values = value_net(next_obs_t).squeeze(1)
+
+            rewards_t = torch.stack(rewards_buf)
+            dones_t = torch.stack(dones_buf)
+            values_t = torch.stack(values_buf)
+            entropy_t = torch.stack(entropy_buf)
+            logprob_t = torch.stack(logprob_buf)
+
+            advantages = torch.zeros_like(rewards_t, device=device)
+            last_gae = torch.zeros(args.num_envs, dtype=torch.float32, device=device)
+            for t in reversed(range(args.n_steps)):
+                if t == args.n_steps - 1:
+                    next_non_terminal = 1.0 - dones_t[t]
+                    next_value = next_values
+                else:
+                    next_non_terminal = 1.0 - dones_t[t]
+                    next_value = values_t[t + 1]
+
+                delta = rewards_t[t] + args.gamma * next_value * next_non_terminal - values_t[t]
+                last_gae = delta + args.gamma * args.gae_lambda * next_non_terminal * last_gae
+                advantages[t] = last_gae
+
+            returns = advantages + values_t
+
+            b_logprob = logprob_t.reshape(-1)
+            b_values = values_t.reshape(-1)
+            b_advantages = advantages.reshape(-1)
+            b_returns = returns.reshape(-1)
+            b_entropy = entropy_t.reshape(-1)
+
+            policy_loss = -(b_logprob * b_advantages.detach()).mean()
+            value_loss = F.mse_loss(b_values, b_returns.detach())
+            entropy = b_entropy.mean()
+
+            total_loss = policy_loss + args.value_loss_coef * value_loss - args.entropy_coef * entropy
+
+            policy_optimizer.zero_grad()
+            value_optimizer.zero_grad()
+            total_loss.backward()
+
+            policy_grad_norm = torch.nn.utils.clip_grad_norm_(policy.parameters(), args.max_grad_norm)
+            value_grad_norm = torch.nn.utils.clip_grad_norm_(value_net.parameters(), args.max_grad_norm)
+            grad_norm = float(max(float(policy_grad_norm), float(value_grad_norm)))
+
+            policy_optimizer.step()
+            value_optimizer.step()
+
+            if len(rewards_history) > 0:
+                logger.log(
+                    {
+                        "episode": episode_count,
+                        "total_reward": last_finished_reward,
+                        "moving_avg_reward": moving_average(rewards_history, window=50)[-1],
+                        "episode_length": last_finished_length,
+                        "loss": float(total_loss.item()),
+                        "learning_rate": policy_optimizer.param_groups[0]["lr"],
+                        "seed": args.seed,
+                        "exp_name": args.exp_name,
+                        "policy_loss": float(policy_loss.item()),
+                        "value_loss": float(value_loss.item()),
+                        "entropy": float(entropy.item()),
+                        "adv_mean": float(b_advantages.mean().item()),
+                        "grad_norm": grad_norm,
+                    }
                 )
-
-                policy_optimizer.zero_grad()
-                value_optimizer.zero_grad()
-                total_loss.backward()
-
-                policy_grad_norm = torch.nn.utils.clip_grad_norm_(policy.parameters(), 10.0)
-                value_grad_norm = torch.nn.utils.clip_grad_norm_(value_net.parameters(), 10.0)
-                grad_norm = float(max(float(policy_grad_norm), float(value_grad_norm)))
-
-                policy_optimizer.step()
-                value_optimizer.step()
-
-                episode_total_losses.append(float(total_loss.item()))
-                episode_policy_losses.append(float(policy_loss.item()))
-                episode_value_losses.append(float(value_loss.item()))
-                episode_entropies.append(float(entropy.item()))
-                episode_advantages.append(float(advantage.mean().item()))
-                episode_grad_norms.append(grad_norm)
-
-                state = next_state
-                if done:
-                    break
-
-            rewards_history.append(total_reward)
-            ma = moving_average(rewards_history, window=50)[-1]
-
-            logger.log(
-                {
-                    "episode": episode,
-                    "total_reward": total_reward,
-                    "moving_avg_reward": ma,
-                    "episode_length": step_count,
-                    "loss": sum(episode_total_losses) / max(1, len(episode_total_losses)),
-                    "learning_rate": policy_optimizer.param_groups[0]["lr"],
-                    "seed": args.seed,
-                    "exp_name": args.exp_name,
-                    "policy_loss": sum(episode_policy_losses) / max(1, len(episode_policy_losses)),
-                    "value_loss": sum(episode_value_losses) / max(1, len(episode_value_losses)),
-                    "entropy": sum(episode_entropies) / max(1, len(episode_entropies)),
-                    "adv_mean": sum(episode_advantages) / max(1, len(episode_advantages)),
-                    "grad_norm": sum(episode_grad_norms) / max(1, len(episode_grad_norms)),
-                }
-            )
-
-            if total_reward > best_reward:
-                best_reward = total_reward
-                torch.save(policy.state_dict(), model_dir / f"{args.exp_name}_best.pt")
-                torch.save(value_net.state_dict(), model_dir / f"{args.exp_name}_value_best.pt")
-
-            if episode % 25 == 0:
-                print(f"[A2C] ep={episode:4d} reward={total_reward:8.2f} ma50={ma:8.2f}")
 
     final_policy_path = model_dir / f"{args.exp_name}.pt"
     final_value_path = model_dir / f"{args.exp_name}_value.pt"
@@ -186,14 +228,15 @@ def main() -> None:
             "seed": args.seed,
             "final_model": str(final_policy_path),
             "final_value_model": str(final_value_path),
-            "episodes": args.episodes,
+            "total_timesteps": args.total_timesteps,
+            "episodes_finished": episode_count,
             "best_episode_reward": best_reward,
-            "final_moving_avg_50": moving_average(rewards_history, 50)[-1],
+            "final_moving_avg_50": moving_average(rewards_history, 50)[-1] if rewards_history else None,
             "hyperparameters": vars(args),
         },
     )
 
-    env.close()
+    envs.close()
     print(f"Saved A2C policy to {final_policy_path}")
 
 

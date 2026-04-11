@@ -13,10 +13,11 @@ def run(cmd: list[str], dry_run: bool = False) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run all 12 core hyperparameter experiments")
+    parser = argparse.ArgumentParser(description="Run all core hyperparameter experiments (DQN, REINFORCE, A2C)")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--episodes-dqn", type=int, default=600)
     parser.add_argument("--episodes-reinforce", type=int, default=800)
+    parser.add_argument("--timesteps-a2c", type=int, default=800000)
     parser.add_argument("--skip-existing", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -35,6 +36,15 @@ def main() -> None:
     ]
 
     reinforce_configs = [
+        ("gamma_low", ["--gamma", "0.90"]),
+        ("gamma_opt", ["--gamma", "0.99"]),
+        ("gamma_high", ["--gamma", "0.999"]),
+        ("hidden_size_low", ["--hidden-size", "64"]),
+        ("hidden_size_opt", ["--hidden-size", "128"]),
+        ("hidden_size_high", ["--hidden-size", "256"]),
+    ]
+
+    a2c_configs = [
         ("gamma_low", ["--gamma", "0.90"]),
         ("gamma_opt", ["--gamma", "0.99"]),
         ("gamma_high", ["--gamma", "0.999"]),
@@ -80,6 +90,26 @@ def main() -> None:
             "--episodes",
             str(args.episodes_reinforce),
             "--normalize-returns",
+            *extra,
+        ]
+        run(cmd, args.dry_run)
+
+    for name, extra in a2c_configs:
+        exp = f"a2c_{name}_seed{args.seed}"
+        model_path = Path("models/a2c") / f"{exp}.pt"
+        if args.skip_existing and model_path.exists():
+            print(f"Skip existing: {model_path}")
+            continue
+        cmd = [
+            sys.executable,
+            "-m",
+            "src.a2c.train_a2c",
+            "--exp-name",
+            exp,
+            "--seed",
+            str(args.seed),
+            "--total-timesteps",
+            str(args.timesteps_a2c),
             *extra,
         ]
         run(cmd, args.dry_run)

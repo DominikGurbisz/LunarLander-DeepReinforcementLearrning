@@ -3,6 +3,7 @@
 Dieses Projekt setzt die Pflichtanforderungen der Aufgabenstellung für **LunarLander** um:
 - **DQN** (value-based)
 - **REINFORCE** (policy-gradient)
+- **A2C** (synchroner Advantage Actor-Critic)
 
 Enthalten sind Training, Evaluation, Logging, Modellspeicherung/-laden, ein separates Demo-Skript und Videoaufzeichnungen pro relevanter Hyperparameter-Einstellung.
 
@@ -108,6 +109,11 @@ python -m src.reinforce.train_reinforce --exp-name reinforce_gamma_opt_seed1 --s
 
 Hinweis: `train_reinforce.py` unterstützt jetzt zusätzlich eine lernbare **Value-Baseline** (standardmäßig aktiv) mit `--value-lr` und `--value-loss-coef`.
 
+### A2C (einzelner Lauf)
+```bash
+python -m src.a2c.train_a2c --exp-name a2c_gamma_opt_seed1 --seed 1 --gamma 0.99 --num-envs 8 --n-steps 5 --total-timesteps 800000
+```
+
 ## 7) Alle Kernexperimente starten
 
 ```bash
@@ -132,10 +138,16 @@ python -m src.dqn.evaluate_dqn --model-path models/dqn/dqn_learning_rate_opt_see
 python -m src.reinforce.evaluate_reinforce --model-path models/reinforce/reinforce_gamma_opt_seed1.pt --episodes 20
 ```
 
+### A2C
+```bash
+python -m src.a2c.evaluate_a2c --model-path models/a2c/a2c_gamma_opt_seed1.pt --episodes 20
+```
+
 Mit Video:
 ```bash
 python -m src.dqn.evaluate_dqn --model-path models/dqn/dqn_learning_rate_opt_seed1.pt --record-video --video-folder videos/dqn/eval
 python -m src.reinforce.evaluate_reinforce --model-path models/reinforce/reinforce_gamma_opt_seed1.pt --record-video --video-folder videos/reinforce/eval
+python -m src.a2c.evaluate_a2c --model-path models/a2c/a2c_gamma_opt_seed1.pt --record-video --video-folder videos/a2c/eval
 ```
 
 ## 9) Separates Demo-Skript (Pflicht)
@@ -143,6 +155,7 @@ python -m src.reinforce.evaluate_reinforce --model-path models/reinforce/reinfor
 ```bash
 python play_demo.py --algo dqn --model-path models/dqn/dqn_learning_rate_opt_seed1.pt --record-video
 python play_demo.py --algo reinforce --model-path models/reinforce/reinforce_gamma_opt_seed1.pt --record-video
+python play_demo.py --algo a2c --model-path models/a2c/a2c_gamma_opt_seed1.pt --record-video
 ```
 
 Zusätzlich möglich:
@@ -169,9 +182,12 @@ Dateipräfixe enthalten Konfiguration + Seed, z. B. `dqn_epsilon_decay_low_seed1
   - `logs/dqn/<exp-name>/summary.json`
   - `logs/reinforce/<exp-name>/metrics.csv`
   - `logs/reinforce/<exp-name>/summary.json`
+  - `logs/a2c/<exp-name>/metrics.csv`
+  - `logs/a2c/<exp-name>/summary.json`
 - Modelle:
   - `models/dqn/*.pt`
   - `models/reinforce/*.pt`
+  - `models/a2c/*.pt`
 - Evaluationszusammenfassungen:
   - `results/tables/*.json`
 
@@ -180,6 +196,7 @@ Geloggte Größen enthalten u. a.:
 - loss, learning_rate, seed, exp_name
 - DQN: epsilon, buffer_size, mean_q
 - REINFORCE: policy_loss, return_mean, return_std, grad_norm
+- A2C: policy_loss, value_loss, entropy, adv_mean, grad_norm
 
 ## 12) Plots erzeugen
 
