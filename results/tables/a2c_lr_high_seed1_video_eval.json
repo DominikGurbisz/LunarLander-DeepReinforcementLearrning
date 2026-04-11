@@ -1,0 +1,10 @@
+{
+  "algorithm": "a2c",
+  "model_path": "models\\a2c\\a2c_lr_high_seed1_best.pt",
+  "episodes": 5,
+  "mean_reward": -360.45749864411636,
+  "std_reward": 37.73126344251277,
+  "min_reward": -407.4006507840787,
+  "max_reward": -317.3118052904442,
+  "seed": 1
+}

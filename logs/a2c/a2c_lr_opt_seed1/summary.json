@@ -1,0 +1,28 @@
+{
+  "algorithm": "a2c",
+  "exp_name": "a2c_lr_opt_seed1",
+  "seed": 1,
+  "final_model": "models\\a2c\\a2c_lr_opt_seed1.pt",
+  "final_value_model": "models\\a2c\\a2c_lr_opt_seed1_value.pt",
+  "total_timesteps": 1000000,
+  "episodes_finished": 2171,
+  "best_episode_reward": 204.60025024414062,
+  "final_moving_avg_50": -17.421470870971678,
+  "hyperparameters": {
+    "exp_name": "a2c_lr_opt_seed1",
+    "seed": 1,
+    "total_timesteps": 1000000,
+    "max_steps": 1000,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "lr": 0.0003,
+    "value_lr": 0.0005,
+    "hidden_size": 128,
+    "value_loss_coef": 0.5,
+    "entropy_coef": 0.001,
+    "num_envs": 8,
+    "n_steps": 32,
+    "max_grad_norm": 0.5,
+    "device": "auto"
+  }
+}

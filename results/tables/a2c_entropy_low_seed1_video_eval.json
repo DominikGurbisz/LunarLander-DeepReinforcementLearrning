@@ -1,0 +1,10 @@
+{
+  "algorithm": "a2c",
+  "model_path": "models\\a2c\\a2c_entropy_low_seed1_best.pt",
+  "episodes": 5,
+  "mean_reward": 18.442900963102453,
+  "std_reward": 124.74818314805593,
+  "min_reward": -185.29249635280468,
+  "max_reward": 118.95463944874598,
+  "seed": 1
+}
