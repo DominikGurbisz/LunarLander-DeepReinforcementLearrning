@@ -43,6 +43,7 @@ def main() -> None:
     args = parse_args()
     dqn_labels = ["epsilon_decay_low", "epsilon_decay_opt", "epsilon_decay_high", "learning_rate_low", "learning_rate_opt", "learning_rate_high"]
     reinf_labels = ["gamma_low", "gamma_opt", "gamma_high", "hidden_size_low", "hidden_size_opt", "hidden_size_high"]
+    a2c_labels = ["gamma_low", "gamma_opt", "gamma_high", "hidden_size_low", "hidden_size_opt", "hidden_size_high"]
 
     for label in dqn_labels:
         exp = f"dqn_{label}_seed{args.seed}"
@@ -67,6 +68,22 @@ def main() -> None:
             Path("models/reinforce") / f"{exp}.pt",
             Path("videos/reinforce") / label,
             f"reinforce_{label}",
+            args.seed,
+            hidden_size,
+        )
+
+    for label in a2c_labels:
+        exp = f"a2c_{label}_seed{args.seed}"
+        hidden_size = 128
+        if label == "hidden_size_low":
+            hidden_size = 64
+        elif label == "hidden_size_high":
+            hidden_size = 256
+        run_demo(
+            "a2c",
+            Path("models/a2c") / f"{exp}.pt",
+            Path("videos/a2c") / label,
+            f"a2c_{label}",
             args.seed,
             hidden_size,
         )
