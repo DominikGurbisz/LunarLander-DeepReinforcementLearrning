@@ -1,0 +1,28 @@
+{
+  "algorithm": "dqn",
+  "exp_name": "dqn_smoke_seed1",
+  "seed": 1,
+  "final_model": "models\\dqn\\dqn_smoke_seed1.pt",
+  "episodes": 20,
+  "best_episode_reward": 5.06867028624913,
+  "final_moving_avg_50": -186.33730979103493,
+  "hyperparameters": {
+    "exp_name": "dqn_smoke_seed1",
+    "seed": 1,
+    "episodes": 20,
+    "max_steps": 1000,
+    "gamma": 0.99,
+    "lr": 0.001,
+    "batch_size": 128,
+    "buffer_size": 100000,
+    "learning_starts": 2000,
+    "train_freq": 1,
+    "target_update_freq": 250,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.05,
+    "epsilon_decay": 0.995,
+    "hidden_size": 128,
+    "tau": 1.0,
+    "device": "auto"
+  }
+}
